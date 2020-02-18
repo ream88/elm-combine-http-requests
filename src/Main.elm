@@ -4,6 +4,7 @@ import Html exposing (..)
 import Http
 import Json.Decode as JD
 import RemoteData exposing (WebData)
+import Task
 
 
 main : Program Never Model Msg
@@ -62,11 +63,26 @@ commentDecoder =
         (JD.succeed { firstName = "foo", lastName = "bar" })
 
 
+userDecoder : JD.Decoder User
+userDecoder =
+    JD.map2 User
+        (JD.field "firstName" JD.string)
+        (JD.field "lastName" JD.string)
+
+
 getComment : (WebData Comment -> msg) -> Cmd msg
 getComment tagger =
+    let
+        userTask =
+            userDecoder
+                |> getRequest "http://localhost:8080/user.json"
+                |> Http.toTask
+    in
     commentDecoder
         |> getRequest "http://localhost:8080/comment.json"
-        |> RemoteData.sendRequest
+        |> Http.toTask
+        |> Task.map2 (\user comment -> { comment | user = user }) userTask
+        |> RemoteData.asCmd
         |> Cmd.map tagger
 
 
